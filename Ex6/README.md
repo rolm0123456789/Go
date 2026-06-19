@@ -18,12 +18,7 @@
 
 ## Instructions de Construction et d'Exécution
 
-### 1. Cloner et se positionner dans le dossier
-```bash
-cd d:/Bureau/Go/Ex6
-```
-
-### 2. Lancer les tests unitaires et d'intégration
+### 1. Lancer les tests unitaires et d'intégration
 ```bash
 $env:Path += ';C:\Program Files\Go\bin'; go test -v ./...
 ```
@@ -31,12 +26,12 @@ $env:Path += ';C:\Program Files\Go\bin'; go test -v ./...
 ```bash
 $env:Path += ';C:\Program Files\Go\bin'; go test -race -v ./...
 ```
-### 3. Compiler l'application
+### 2. Compiler l'application
 ```bash
 $env:Path += ';C:\Program Files\Go\bin'; go build -o bin/urlwatch.exe ./cmd/urlwatch
 ```
 
-### 4. Démarrer l'application
+### 3. Démarrer l'application
 Vous pouvez démarrer l'application directement avec `go run` ou exécuter le binaire compilé.
 Voici les variables d'environnement configurables :
 - `PORT` : Port d'écoute HTTP (défaut `8080`).
