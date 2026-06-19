@@ -20,6 +20,7 @@ import (
 	// SQLite GORM (CGO-free)
 	gsqlite "github.com/glebarez/sqlite"
 	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 func main() {
@@ -70,7 +71,9 @@ func main() {
 		logger.Info("Initialisation de la base SQLite...", "path", dbPath)
 		
 		// Ouverture avec le driver SQLite pur Go GORM (CGO-free)
-		gormDB, err := gorm.Open(gsqlite.Open(dbPath), &gorm.Config{})
+		gormDB, err := gorm.Open(gsqlite.Open(dbPath), &gorm.Config{
+			Logger: gormlogger.Default.LogMode(gormlogger.Silent),
+		})
 		if err != nil {
 			logger.Error("Impossible d'ouvrir la base SQLite", "error", err)
 			os.Exit(1)
