@@ -3,12 +3,74 @@ package pool
 import (
 	"context"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"urlwatch/internal/checker"
 	"urlwatch/internal/domain"
 )
+
+// concurrencyTrackerChecker mesure le nombre maximal de vérifications simultanées.
+type concurrencyTrackerChecker struct {
+	active    atomic.Int32
+	maxActive atomic.Int32
+	delay     time.Duration
+}
+
+func (c *concurrencyTrackerChecker) Check(ctx context.Context, url string) domain.CheckResult {
+	cur := c.active.Add(1)
+	defer c.active.Add(-1)
+
+	for {
+		max := c.maxActive.Load()
+		if cur <= max {
+			break
+		}
+		if c.maxActive.CompareAndSwap(max, cur) {
+			break
+		}
+	}
+
+	select {
+	case <-time.After(c.delay):
+	case <-ctx.Done():
+		return domain.CheckResult{
+			URL:       url,
+			OK:        false,
+			LatencyMS: c.delay.Milliseconds(),
+			Error:     ctx.Err().Error(),
+		}
+	}
+
+	return domain.CheckResult{
+		URL:        url,
+		StatusCode: 200,
+		OK:         true,
+		LatencyMS:  c.delay.Milliseconds(),
+	}
+}
+
+func TestRunBatch_ConcurrencyBound(t *testing.T) {
+	const concurrency = 2
+	const urlCount = 8
+	const workDelay = 50 * time.Millisecond
+
+	tracker := &concurrencyTrackerChecker{delay: workDelay}
+	urls := make([]string, urlCount)
+	for i := range urls {
+		urls[i] = "https://example.com/" + string(rune('a'+i))
+	}
+
+	results := RunBatch(context.Background(), urls, concurrency, 2*time.Second, tracker)
+
+	if len(results) != urlCount {
+		t.Fatalf("Attendu %d résultats, obtenu %d", urlCount, len(results))
+	}
+	if got := tracker.maxActive.Load(); got > concurrency {
+		t.Errorf("concurrence maximale depassee : %d > %d", got, concurrency)
+	}
+}
 
 func TestRunBatch_Success(t *testing.T) {
 	// Préparation des réponses mockées

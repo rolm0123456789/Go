@@ -1,10 +1,12 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -155,24 +157,7 @@ func (api *API) CreateCheckBatch(w http.ResponseWriter, r *http.Request) {
 	results := pool.RunBatch(ctx, req.URLs, req.Options.Concurrency, time.Duration(req.Options.TimeoutMS)*time.Millisecond, api.checker)
 
 	totalDuration := time.Since(startTime).Milliseconds()
-
-	// Agrégation du résumé
-	upCount := 0
-	downCount := 0
-	for _, res := range results {
-		if res.OK {
-			upCount++
-		} else {
-			downCount++
-		}
-	}
-
-	summary := domain.BatchSummary{
-		Total:      len(results),
-		Up:         upCount,
-		Down:       downCount,
-		DurationMS: totalDuration,
-	}
+	summary := domain.ComputeSummary(results, totalDuration)
 
 	// ID court b_xxxxx (8 caractères de UUID pour correspondre à "b_4f3c1a")
 	batchID := fmt.Sprintf("b_%s", strings.ReplaceAll(uuid.New().String()[:8], "-", ""))
@@ -187,7 +172,7 @@ func (api *API) CreateCheckBatch(w http.ResponseWriter, r *http.Request) {
 	// Persistance du lot
 	if err := api.store.Save(r.Context(), batch); err != nil {
 		api.logger.Error("Echec de la sauvegarde du lot", "batch_id", batchID, "error", err)
-		writeError(w, "internal_error", "impossible de persister le lot de verifications", http.StatusInternalServerError)
+		writeError(w, "internal", "impossible de persister le lot de verifications", http.StatusInternalServerError)
 		return
 	}
 
@@ -216,7 +201,7 @@ func (api *API) GetCheckBatch(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		api.logger.Error("Erreur lors de la lecture du lot", "batch_id", id, "error", err)
-		writeError(w, "internal_error", "impossible de recuperer le lot", http.StatusInternalServerError)
+		writeError(w, "internal", "impossible de recuperer le lot", http.StatusInternalServerError)
 		return
 	}
 
@@ -226,8 +211,63 @@ func (api *API) GetCheckBatch(w http.ResponseWriter, r *http.Request) {
 }
 
 // ============================================================================
-// MIDDLEWARES (SLOG JSON & RECOVERY)
+// MIDDLEWARES (SLOG JSON, 405 & RECOVERY)
 // ============================================================================
+
+// bufferedResponseWriter intercepte la réponse pour permettre la réécriture des 405.
+type bufferedResponseWriter struct {
+	http.ResponseWriter
+	statusCode  int
+	body        bytes.Buffer
+	header      http.Header
+	wroteHeader bool
+}
+
+func (rw *bufferedResponseWriter) Header() http.Header {
+	if rw.header == nil {
+		rw.header = make(http.Header)
+	}
+	return rw.header
+}
+
+func (rw *bufferedResponseWriter) WriteHeader(code int) {
+	rw.statusCode = code
+	rw.wroteHeader = true
+}
+
+func (rw *bufferedResponseWriter) Write(b []byte) (int, error) {
+	if !rw.wroteHeader {
+		rw.WriteHeader(http.StatusOK)
+	}
+	return rw.body.Write(b)
+}
+
+func flushBufferedResponse(w http.ResponseWriter, rw *bufferedResponseWriter) {
+	for k, vals := range rw.header {
+		for _, v := range vals {
+			w.Header().Add(k, v)
+		}
+	}
+	w.WriteHeader(rw.statusCode)
+	_, _ = io.Copy(w, &rw.body)
+}
+
+// MethodNotAllowedMiddleware convertit les réponses 405 du ServeMux en JSON structuré.
+func MethodNotAllowedMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		bw := &bufferedResponseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+		next.ServeHTTP(bw, r)
+
+		if bw.statusCode == http.StatusMethodNotAllowed {
+			writeError(w, "method_not_allowed",
+				fmt.Sprintf("methode %s non autorisee pour %s", r.Method, r.URL.Path),
+				http.StatusMethodNotAllowed)
+			return
+		}
+
+		flushBufferedResponse(w, bw)
+	})
+}
 
 type responseWriterWrapper struct {
 	http.ResponseWriter
@@ -283,7 +323,7 @@ func RecoveryMiddleware(logger *slog.Logger) func(http.Handler) http.Handler {
 						"error", err,
 						"stack", string(debug.Stack()),
 					)
-					writeError(w, "internal_error", "un probleme interne inattendu est survenu", http.StatusInternalServerError)
+					writeError(w, "internal", "un probleme interne inattendu est survenu", http.StatusInternalServerError)
 				}
 			}()
 			next.ServeHTTP(w, r)

@@ -154,7 +154,7 @@ func TestCreateCheckBatch_ValidationError(t *testing.T) {
 
 func TestGetCheckBatch_NotFound(t *testing.T) {
 	apiInstance, _, _ := newTestAPI()
-	
+
 	req := httptest.NewRequest("GET", "/v1/checks/b_inexistant", nil)
 	rec := httptest.NewRecorder()
 
@@ -173,5 +173,29 @@ func TestGetCheckBatch_NotFound(t *testing.T) {
 	}
 	if errResp.Error.Code != "batch_not_found" {
 		t.Errorf("Attendu code 'batch_not_found', obtenu '%s'", errResp.Error.Code)
+	}
+}
+
+func TestMethodNotAllowed_JSONError(t *testing.T) {
+	apiInstance, _, _ := newTestAPI()
+
+	mux := http.NewServeMux()
+	apiInstance.RegisterRoutes(mux)
+	handler := MethodNotAllowedMiddleware(mux)
+
+	req := httptest.NewRequest("DELETE", "/v1/checks/b_test", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("Attendu statut 405, obtenu %d", rec.Code)
+	}
+
+	var errResp ErrorResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &errResp); err != nil {
+		t.Fatalf("Impossible de décoder le JSON : %v", err)
+	}
+	if errResp.Error.Code != "method_not_allowed" {
+		t.Errorf("Attendu code 'method_not_allowed', obtenu '%s'", errResp.Error.Code)
 	}
 }

@@ -20,15 +20,19 @@
 
 ### 1. Lancer les tests unitaires et d'intégration
 ```bash
-$env:Path += ';C:\Program Files\Go\bin'; go test -v ./...
+go test -v ./...
 ```
-*Note : Si le compilateur C/CGO est disponible sur votre machine (ce qui est souvent le cas sur les serveurs de correction), vous pouvez ajouter l'option `-race` pour vérifier l'absence de race conditions :*
+
+Pour vérifier l'absence de race conditions :
 ```bash
-$env:Path += ';C:\Program Files\Go\bin'; go test -race -v ./...
+go test -race -v ./...
 ```
+
 ### 2. Compiler l'application
 ```bash
-$env:Path += ';C:\Program Files\Go\bin'; go build -o bin/urlwatch.exe ./cmd/urlwatch
+go build ./...
+# ou binaire nommé :
+go build -o bin/urlwatch ./cmd/urlwatch
 ```
 
 ### 3. Démarrer l'application
@@ -41,7 +45,12 @@ Voici les variables d'environnement configurables :
 
 #### Commande de démarrage par défaut (SQLite, Port 8080) :
 ```bash
-$env:Path += ';C:\Program Files\Go\bin'; go run ./cmd/urlwatch
+go run ./cmd/urlwatch
+```
+
+#### Démarrage avec store en mémoire (utile pour les tests locaux) :
+```bash
+STORE_TYPE=memory go run ./cmd/urlwatch
 ```
 
 ---

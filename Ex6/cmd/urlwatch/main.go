@@ -103,8 +103,9 @@ func main() {
 	mux := http.NewServeMux()
 	appAPI.RegisterRoutes(mux)
 
-	// Application des middlewares dans l'ordre : Recovery puis Logging
+	// Application des middlewares : 405 JSON, Logging puis Recovery
 	var handler http.Handler = mux
+	handler = api.MethodNotAllowedMiddleware(handler)
 	handler = api.LoggingMiddleware(logger)(handler)
 	handler = api.RecoveryMiddleware(logger)(handler)
 

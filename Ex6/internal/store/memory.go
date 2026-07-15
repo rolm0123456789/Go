@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"urlwatch/internal/domain"
@@ -27,7 +28,7 @@ func (ms *MemoryStore) Save(ctx context.Context, b domain.Batch) error {
 
 	// Vérification de l'annulation du contexte
 	if err := ctx.Err(); err != nil {
-		return err
+		return fmt.Errorf("annulation de la sauvegarde du lot %s: %w", b.ID, err)
 	}
 
 	ms.batches[b.ID] = b
@@ -40,7 +41,7 @@ func (ms *MemoryStore) Get(ctx context.Context, id string) (domain.Batch, error)
 	defer ms.RUnlock()
 
 	if err := ctx.Err(); err != nil {
-		return domain.Batch{}, err
+		return domain.Batch{}, fmt.Errorf("annulation de la lecture du lot %s: %w", id, err)
 	}
 
 	b, exists := ms.batches[id]

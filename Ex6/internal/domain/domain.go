@@ -54,3 +54,20 @@ type Store interface {
 	Save(ctx context.Context, b Batch) error
 	Get(ctx context.Context, id string) (Batch, error)
 }
+
+// ComputeSummary agrège les résultats d'un lot en un résumé statistique.
+func ComputeSummary(results []CheckResult, durationMS int64) BatchSummary {
+	up := 0
+	for _, res := range results {
+		if res.OK {
+			up++
+		}
+	}
+	total := len(results)
+	return BatchSummary{
+		Total:      total,
+		Up:         up,
+		Down:       total - up,
+		DurationMS: durationMS,
+	}
+}

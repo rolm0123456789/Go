@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"urlwatch/internal/domain"
 
@@ -26,8 +27,10 @@ func NewSQLiteStore(db *gorm.DB) (*SQLiteStore, error) {
 
 // Save persiste le lot d'URLs dans la base de données SQLite.
 func (ss *SQLiteStore) Save(ctx context.Context, b domain.Batch) error {
-	// Utilisation de Create avec propagation du contexte
-	return ss.db.WithContext(ctx).Create(&b).Error
+	if err := ss.db.WithContext(ctx).Create(&b).Error; err != nil {
+		return fmt.Errorf("sauvegarde du lot %s: %w", b.ID, err)
+	}
+	return nil
 }
 
 // Get récupère un lot par ID depuis la base SQLite.
@@ -38,7 +41,7 @@ func (ss *SQLiteStore) Get(ctx context.Context, id string) (domain.Batch, error)
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return domain.Batch{}, domain.ErrBatchNotFound
 		}
-		return domain.Batch{}, err
+		return domain.Batch{}, fmt.Errorf("lecture du lot %s: %w", id, err)
 	}
 	return b, nil
 }
